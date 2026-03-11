@@ -1,4 +1,4 @@
-# Wisper — The Whisper Flow Alternative (That Doesn’t Suck)
+# Whisper Flow Alternative (That Doesn’t Suck)
 
 **Mac only.** Yes, it’s a Whisper Flow alternative. You hold a key (or click), talk, release, and your words become text. On your Mac. In your machine. No “cloud,” no “AI platform,” no “we’re totally not reading your stuff.”
 
