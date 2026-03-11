@@ -23,7 +23,10 @@ from .shortcuts import (
 )
 from .transcriber import get_device, load_model, transcribe
 
-_PROJECT_ROOT = __import__("pathlib").Path(__file__).resolve().parent.parent
+from pathlib import Path as _Path
+
+_FROZEN = getattr(sys, "frozen", False)
+_PROJECT_ROOT = _Path(sys.executable).resolve().parent if _FROZEN else _Path(__file__).resolve().parent.parent
 
 
 class WFApp(rumps.App):
@@ -47,7 +50,7 @@ class WFApp(rumps.App):
         self.device: str | None = None
         self._key_listener = None
         self._mouse_listener = None
-        self._hold_release_timer: threading.Timer | None = None
+        self._last_hold_end: float = 0.0
         self._config_mtime: float = 0
         self._settings_proc: subprocess.Popen | None = None
         self._tray_hide_timer: threading.Timer | None = None
@@ -174,9 +177,15 @@ class WFApp(rumps.App):
                 listener.stop()
                 setattr(self, attr, None)
 
+    def _notify_accessibility_fail(self):
+        rumps.notification(
+            "WisperFlow Alternative",
+            "Accessibility Permission Required",
+            "Grant access in System Settings > Privacy & Security > Accessibility, then restart.",
+        )
+
     def _restart_listeners(self):
         self._stop_all_listeners()
-        self._hold_release_timer = None
 
         hold_kind, hold_target = parse_shortcut(self.config["shortcut_hold"])
         toggle_kind, toggle_target = parse_shortcut(self.config["shortcut_toggle"])
@@ -186,35 +195,23 @@ class WFApp(rumps.App):
         has_mouse_hold = hold_kind == "mouse" and hold_target is not None
         has_mouse_toggle = toggle_kind == "mouse" and toggle_target is not None
 
-        # Shared hold logic: double-press converts hold → toggle
         def hold_press():
             if self.whisper_model is None:
                 return
-            timer = self._hold_release_timer
-            if timer is not None:
-                timer.cancel()
-                self._hold_release_timer = None
-                self._recording_mode = "toggle"
-                AppHelper.callAfter(lambda: self.overlay and self.overlay.show_toggle())
-                return
             if self.is_recording and self._recording_mode == "toggle":
                 self._stop_recording()
-            elif not self.is_recording and not self.is_processing:
+                return
+            if self.is_recording or self.is_processing:
+                return
+            if time.time() - self._last_hold_end < 1.0:
+                self._start_recording("toggle")
+            else:
                 self._start_recording("hold")
 
         def hold_release():
-            if not (self.is_recording and self._recording_mode == "hold"):
-                return
-
-            def _finalize():
-                self._hold_release_timer = None
-                if self.is_recording and self._recording_mode == "hold":
-                    self._stop_recording()
-
-            t = threading.Timer(0.3, _finalize)
-            t.daemon = True
-            self._hold_release_timer = t
-            t.start()
+            if self.is_recording and self._recording_mode == "hold":
+                self._last_hold_end = time.time()
+                self._stop_recording()
 
         def toggle_press():
             if self.whisper_model is None:
@@ -240,7 +237,10 @@ class WFApp(rumps.App):
                 if vk_hold is not None and vk == vk_hold:
                     hold_release()
 
-            self._key_listener = RawKeyboardListener(on_key_press, on_key_release, suppress_vks)
+            self._key_listener = RawKeyboardListener(
+                on_key_press, on_key_release, suppress_vks,
+                on_tap_failed=self._notify_accessibility_fail,
+            )
             self._key_listener.start()
 
         # Mouse listener
@@ -260,7 +260,10 @@ class WFApp(rumps.App):
                 elif toggle_match and pressed:
                     toggle_press()
 
-            self._mouse_listener = RawMouseListener(on_mouse, suppress_btns)
+            self._mouse_listener = RawMouseListener(
+                on_mouse, suppress_btns,
+                on_tap_failed=self._notify_accessibility_fail,
+            )
             self._mouse_listener.start()
 
         print(f"[wf] Listening: hold={self.config['shortcut_hold']}  toggle={self.config['shortcut_toggle']}")
@@ -338,9 +341,6 @@ class WFApp(rumps.App):
 
     def _cancel_recording(self):
         if self.is_recording:
-            if self._hold_release_timer:
-                self._hold_release_timer.cancel()
-                self._hold_release_timer = None
             self._stop_recording()
 
     def _ui_show_recording(self, mode: str):

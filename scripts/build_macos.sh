@@ -40,10 +40,12 @@ pyinstaller \
     --osx-bundle-identifier com.wisperflow.app \
     wisperflow/__main__.py
 
-# Patch Info.plist: agent app (no dock icon)
+# Patch Info.plist
 PLIST="dist/${APP_NAME}.app/Contents/Info.plist"
 /usr/libexec/PlistBuddy -c "Add :LSUIElement bool true" "$PLIST" 2>/dev/null || \
 /usr/libexec/PlistBuddy -c "Set :LSUIElement true" "$PLIST"
+/usr/libexec/PlistBuddy -c "Add :NSMicrophoneUsageDescription string 'WisperFlow Alternative needs microphone access to transcribe speech.'" "$PLIST" 2>/dev/null || \
+/usr/libexec/PlistBuddy -c "Set :NSMicrophoneUsageDescription 'WisperFlow Alternative needs microphone access to transcribe speech.'" "$PLIST"
 
 echo "==> Creating DMG installer..."
 

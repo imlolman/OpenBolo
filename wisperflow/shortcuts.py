@@ -88,9 +88,10 @@ def vk_from_pynput(key) -> int | None:
 class RawMouseListener:
     """CGEvent-based listener that distinguishes all mouse buttons and suppresses matched ones."""
 
-    def __init__(self, callback, suppress_buttons=frozenset()):
+    def __init__(self, callback, suppress_buttons=frozenset(), on_tap_failed=None):
         self._cb = callback
         self._suppress = suppress_buttons
+        self._on_tap_failed = on_tap_failed
         self._runloop = None
 
     def start(self):
@@ -134,6 +135,8 @@ class RawMouseListener:
         )
         if tap is None:
             print("[wf] CGEventTap (mouse) failed — grant Accessibility permission")
+            if self._on_tap_failed:
+                self._on_tap_failed()
             return
 
         src = CFMachPortCreateRunLoopSource(None, tap, 0)
@@ -146,10 +149,11 @@ class RawMouseListener:
 class RawKeyboardListener:
     """CGEvent-based keyboard listener that suppresses matched shortcut key events."""
 
-    def __init__(self, on_press, on_release, suppress_vks=frozenset()):
+    def __init__(self, on_press, on_release, suppress_vks=frozenset(), on_tap_failed=None):
         self._on_press = on_press
         self._on_release = on_release
         self._suppress = suppress_vks
+        self._on_tap_failed = on_tap_failed
         self._runloop = None
         self._mod_pressed = set()
 
@@ -200,6 +204,8 @@ class RawKeyboardListener:
         )
         if tap is None:
             print("[wf] CGEventTap (keyboard) failed — grant Accessibility permission")
+            if self._on_tap_failed:
+                self._on_tap_failed()
             return
 
         src = CFMachPortCreateRunLoopSource(None, tap, 0)

@@ -35,8 +35,11 @@ def main():
         from .app import WFApp
 
     try:
-        import HIServices
-        HIServices.AXIsProcessTrusted()
+        from ApplicationServices import AXIsProcessTrustedWithOptions
+        from CoreFoundation import kCFBooleanTrue
+        trusted = AXIsProcessTrustedWithOptions({"AXTrustedCheckOptionPrompt": kCFBooleanTrue})
+        if not trusted:
+            print("[wf] Accessibility permission required — check System Settings > Privacy > Accessibility")
     except Exception:
         pass
 
