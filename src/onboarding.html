@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="css/theme.css">
+<style>
+  body { overflow: hidden; }
+  .wizard { height: 100vh; display: flex; flex-direction: column; }
+  .steps { flex: 1; position: relative; overflow: hidden; }
+  .step { position: absolute; inset: 0; padding: 24px 22px; opacity: 0; pointer-events: none; transition: opacity 0.25s; overflow-y: auto; }
+  .step.active { opacity: 1; pointer-events: auto; }
+  .footer { display: flex; align-items: center; justify-content: space-between; padding: 12px 22px; border-top: 1px solid var(--border); }
+  .dots { display: flex; gap: 6px; }
+  .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--text2); transition: background 0.2s; }
+  .dot.on { background: var(--accent); }
+  .nav-btn { background: transparent; border: 1px solid var(--border); color: var(--accent); border-radius: 8px; padding: 6px 18px; font-size: 13px; cursor: pointer; }
+  .nav-btn:hover { border-color: var(--accent); }
+  .nav-btn.primary { background: var(--accent); color: #000; border-color: var(--accent); font-weight: 600; }
+  .nav-btn:disabled { opacity: 0.3; cursor: default; }
+  .welcome-icon { text-align: center; font-size: 48px; margin: 20px 0 10px; }
+  .welcome-text { text-align: center; color: var(--text2); font-size: 13px; margin: 8px 0 18px; line-height: 1.5; }
+  .mic-item { display: flex; align-items: center; padding: 8px 10px; border-radius: 8px; cursor: pointer; gap: 8px; font-size: 13px; }
+  .mic-item:hover { background: rgba(255,255,255,0.04); }
+  .mic-item.sel { background: rgba(107,163,214,0.1); }
+  .mic-radio { width: 14px; height: 14px; border-radius: 50%; border: 2px solid var(--text2); flex-shrink: 0; }
+  .mic-item.sel .mic-radio { border-color: var(--accent); background: var(--accent); }
+  #levelWrap { margin-top: 12px; display: none; }
+  .level-bar { height: 4px; background: var(--border); border-radius: 2px; overflow: hidden; }
+  .level-fill { height: 100%; width: 0%; background: var(--accent); transition: width 0.15s; border-radius: 2px; }
+  .perm-badge { display: inline-block; font-size: 11px; padding: 2px 8px; border-radius: 10px; margin-top: 8px; }
+  .perm-ok { background: rgba(80,200,120,0.15); color: #50c878; }
+  .perm-wait { background: rgba(232,160,64,0.15); color: #e8a040; }
+  .done-icon { text-align: center; font-size: 52px; margin: 30px 0 12px; }
+  .done-text { text-align: center; font-size: 14px; margin-bottom: 8px; }
+  .done-sub { text-align: center; color: var(--text2); font-size: 12px; line-height: 1.5; }
+  #dlProgress { margin-top: 12px; display: none; }
+  .dl-text { font-size: 11px; color: var(--text2); margin-bottom: 4px; }
+</style>
+</head>
+<body>
+<div class="wizard">
+  <div class="steps">
+    <!-- Step 1: Mic -->
+    <div class="step active" id="step1">
+      <div class="welcome-icon">🎤</div>
+      <h1>Welcome to WhisperFlow Alternative</h1>
+      <div class="welcome-text">Select your microphone to get started</div>
+      <div class="card" id="micList"></div>
+      <div id="levelWrap">
+        <div class="level-bar"><div class="level-fill" id="levelFill"></div></div>
+      </div>
+      <div id="permStatus"></div>
+      <div id="dlProgress">
+        <div class="dl-text" id="dlText">Downloading speech model...</div>
+        <div class="level-bar"><div class="level-fill" id="dlFill"></div></div>
+      </div>
+    </div>
+
+    <!-- Step 2: Shortcuts -->
+    <div class="step" id="step2">
+      <div class="section-title">Hold Shortcut</div>
+      <div class="card">
+        <div class="label">Press &amp; hold to record, release to stop</div>
+        <div class="sc-row">
+          <span class="sc-disp" id="holdDisp">Middle Click</span>
+          <button class="btn" id="holdBtn" onclick="capture('hold')">Set</button>
+        </div>
+      </div>
+      <div class="section-title" style="margin-top:16px">Toggle Shortcut</div>
+      <div class="card">
+        <div class="label">Press to start recording, press again to stop</div>
+        <div class="sc-row">
+          <span class="sc-disp" id="toggleDisp">Right Option ⌥</span>
+          <button class="btn" id="toggleBtn" onclick="capture('toggle')">Set</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Step 3: Done -->
+    <div class="step" id="step3">
+      <div class="done-icon">✓</div>
+      <div class="done-text">You're all set!</div>
+      <div class="done-sub">WhisperFlow Alternative runs in your menu bar.<br>Use your shortcuts to start dictating.</div>
+    </div>
+  </div>
+
+  <div class="footer">
+    <button class="nav-btn" id="backBtn" onclick="back()" style="visibility:hidden">Back</button>
+    <div class="dots">
+      <div class="dot on" id="d0"></div>
+      <div class="dot" id="d1"></div>
+      <div class="dot" id="d2"></div>
+    </div>
+    <button class="nav-btn primary" id="nextBtn" onclick="next()">Continue</button>
+  </div>
+</div>
+
+<script src="js/onboarding.js"></script>
+</body>
+</html>

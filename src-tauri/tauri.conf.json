@@ -1,0 +1,25 @@
+{
+  "$schema": "https://raw.githubusercontent.com/tauri-apps/tauri/dev/crates/tauri-cli/schema.json",
+  "productName": "WhisperFlow Alternative",
+  "version": "0.1.0",
+  "identifier": "com.whisperflow-alternative.app",
+  "build": {
+    "frontendDist": "../src"
+  },
+  "app": {
+    "withGlobalTauri": true,
+    "macOSPrivateApi": true,
+    "windows": [],
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["dmg", "app", "nsis", "msi"],
+    "icon": ["icons/icon.png"],
+    "macOS": {
+      "minimumSystemVersion": "11.0"
+    }
+  }
+}

@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="css/theme.css">
+<style>
+  body { overflow-y: auto; }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>WhisperFlow Alternative</h1>
+
+  <div class="section-title">Microphone</div>
+  <div class="card">
+    <select id="micSel"></select>
+  </div>
+
+  <div class="section-title">Hold Shortcut</div>
+  <div class="card">
+    <div class="label">Press &amp; hold to record, release to stop</div>
+    <div class="sc-row">
+      <span class="sc-disp" id="holdDisp">&nbsp;</span>
+      <button class="btn" id="holdBtn" onclick="capture('hold')">Set</button>
+    </div>
+  </div>
+
+  <div class="section-title">Toggle Shortcut</div>
+  <div class="card">
+    <div class="label">Press to start recording, press again to stop</div>
+    <div class="sc-row">
+      <span class="sc-disp" id="toggleDisp">&nbsp;</span>
+      <button class="btn" id="toggleBtn" onclick="capture('toggle')">Set</button>
+    </div>
+  </div>
+
+  <div class="section-title">Paste Last Dictation</div>
+  <div class="card">
+    <div class="label">Press to paste your most recent transcription</div>
+    <div class="sc-row">
+      <span class="sc-disp" id="pasteDisp">&nbsp;</span>
+      <button class="btn" id="pasteBtn" onclick="capture('paste')">Set</button>
+    </div>
+  </div>
+
+  <div class="section-title">Options</div>
+  <div class="card">
+    <div class="opt-row" onclick="tog('hide_dock_icon')">
+      <div class="opt-info">
+        <span>Auto-hide dock icon</span>
+        <span class="opt-desc">Hide the app from the Dock</span>
+      </div>
+      <input type="checkbox" id="chkDock">
+    </div>
+    <div class="opt-row" onclick="tog('hide_menu_icon')">
+      <div class="opt-info">
+        <span>Auto-hide menu bar icon</span>
+        <span class="opt-desc">Visible for 10s on launch, then hides</span>
+      </div>
+      <input type="checkbox" id="chkMenu">
+    </div>
+    <div class="opt-row" onclick="tog('start_on_login')">
+      <div class="opt-info">
+        <span>Start on login</span>
+        <span class="opt-desc">Launch automatically when you log in</span>
+      </div>
+      <input type="checkbox" id="chkLogin">
+    </div>
+  </div>
+
+  <div class="section-title">History</div>
+  <div class="card">
+    <div class="hlist" id="hlist"></div>
+  </div>
+</div>
+
+<script src="js/settings.js"></script>
+</body>
+</html>
