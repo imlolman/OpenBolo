@@ -418,6 +418,7 @@ impl GrabState {
     }
 }
 
+#[cfg(not(target_os = "windows"))]
 pub fn start_grab(
     handle: GrabHandle,
     event_tx: tokio::sync::mpsc::UnboundedSender<ShortcutEvent>,
@@ -453,11 +454,8 @@ pub fn start_grab(
             }
 
             if !handle.enabled.load(Ordering::SeqCst) {
-                match event.event_type {
-                    EventType::KeyRelease(key) => {
-                        guard.pressed.remove(&key);
-                    }
-                    _ => {}
+                if let EventType::KeyRelease(key) = event.event_type {
+                    guard.pressed.remove(&key);
                 }
                 return Some(event);
             }
@@ -470,49 +468,29 @@ pub fn start_grab(
                         return Some(event);
                     }
                     let suppress = guard.process_key_press(&config, key);
-                    if suppress {
-                        None
-                    } else {
-                        Some(event)
-                    }
+                    if suppress { None } else { Some(event) }
                 }
-
                 EventType::KeyRelease(key) => {
                     guard.pressed.remove(&key);
                     let suppress = guard.process_key_release(&config, key);
-                    if suppress {
-                        None
-                    } else {
-                        Some(event)
-                    }
+                    if suppress { None } else { Some(event) }
                 }
-
                 EventType::ButtonPress(btn) => {
                     let btn_code = button_from_rdev(&btn);
                     if btn_code == 255 {
                         return Some(event);
                     }
                     let suppress = guard.process_button_press(&config, btn_code);
-                    if suppress {
-                        None
-                    } else {
-                        Some(event)
-                    }
+                    if suppress { None } else { Some(event) }
                 }
-
                 EventType::ButtonRelease(btn) => {
                     let btn_code = button_from_rdev(&btn);
                     if btn_code == 255 {
                         return Some(event);
                     }
                     let suppress = guard.process_button_release(&config, btn_code);
-                    if suppress {
-                        None
-                    } else {
-                        Some(event)
-                    }
+                    if suppress { None } else { Some(event) }
                 }
-
                 _ => Some(event),
             }
         };
@@ -521,6 +499,82 @@ pub fn start_grab(
             eprintln!("[openbolo] Failed to grab input events: {:?}", e);
             eprintln!("[openbolo] On macOS: Grant Accessibility permission in System Settings > Privacy & Security > Accessibility.");
             eprintln!("[openbolo] On Linux: Ensure you're in the 'input' group or run with appropriate permissions.");
+        }
+    })
+}
+
+/// Windows does not support event suppression via rdev::grab; fall back to rdev::listen.
+#[cfg(target_os = "windows")]
+pub fn start_grab(
+    handle: GrabHandle,
+    event_tx: tokio::sync::mpsc::UnboundedSender<ShortcutEvent>,
+) -> std::thread::JoinHandle<()> {
+    std::thread::spawn(move || {
+        let state = Arc::new(parking_lot::Mutex::new(GrabState {
+            handle,
+            event_tx,
+            pressed: HashSet::new(),
+            combo_hold_active: false,
+            combo_toggle_active: false,
+            combo_paste_active: false,
+            paste_pending: false,
+        }));
+
+        let callback_state = Arc::clone(&state);
+        let callback = move |event: Event| {
+            let mut guard = callback_state.lock();
+            let handle = &guard.handle;
+
+            if handle.capture_mode.load(Ordering::SeqCst) {
+                if let EventType::ButtonPress(btn) = event.event_type {
+                    let btn_code = button_from_rdev(&btn);
+                    if btn_code != 255 {
+                        let name = button_to_name(btn_code);
+                        if let Some(tx) = handle.capture_tx.lock().take() {
+                            tx.send(name).ok();
+                        }
+                    }
+                }
+                return;
+            }
+
+            if !handle.enabled.load(Ordering::SeqCst) {
+                if let EventType::KeyRelease(key) = event.event_type {
+                    guard.pressed.remove(&key);
+                }
+                return;
+            }
+
+            let config = handle.config.read().clone();
+
+            match event.event_type {
+                EventType::KeyPress(key) => {
+                    if guard.pressed.insert(key) {
+                        guard.process_key_press(&config, key);
+                    }
+                }
+                EventType::KeyRelease(key) => {
+                    guard.pressed.remove(&key);
+                    guard.process_key_release(&config, key);
+                }
+                EventType::ButtonPress(btn) => {
+                    let btn_code = button_from_rdev(&btn);
+                    if btn_code != 255 {
+                        guard.process_button_press(&config, btn_code);
+                    }
+                }
+                EventType::ButtonRelease(btn) => {
+                    let btn_code = button_from_rdev(&btn);
+                    if btn_code != 255 {
+                        guard.process_button_release(&config, btn_code);
+                    }
+                }
+                _ => {}
+            }
+        };
+
+        if let Err(e) = rdev::listen(callback) {
+            eprintln!("[openbolo] Failed to listen to input events: {:?}", e);
             eprintln!("[openbolo] On Windows: Run as administrator if needed.");
         }
     })
