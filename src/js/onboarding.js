@@ -7,6 +7,7 @@ let holdShortcut = 'mouse:middle';
 let toggleShortcut = 'key:Alt_R';
 let capturing = null;
 let modelReady = false;
+let platform = 'macos';
 
 const CODE_MAP = {
   AltLeft:'key:Alt_L', AltRight:'key:Alt_R',
@@ -22,21 +23,36 @@ for (let i = 0; i <= 9; i++) CODE_MAP['Digit' + i] = 'key:' + i;
 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('').forEach(c => { CODE_MAP['Key' + c] = 'key:' + c.toLowerCase(); });
 
 function keyDisp(code) {
-  const m = {
-    ControlLeft:'\u2303', ControlRight:'\u2303',
-    ShiftLeft:'\u21e7', ShiftRight:'\u21e7',
-    AltLeft:'\u2325', AltRight:'\u2325',
-    MetaLeft:'\u2318', MetaRight:'\u2318',
-    Escape:'Esc', Enter:'\u21a9', Backspace:'\u232b',
-    Delete:'\u2326', Tab:'\u21e5', Space:'\u2423',
-  };
-  if (m[code]) return m[code];
+  if (platform === 'macos') {
+    const m = {
+      ControlLeft:'\u2303', ControlRight:'\u2303',
+      ShiftLeft:'\u21e7', ShiftRight:'\u21e7',
+      AltLeft:'\u2325', AltRight:'\u2325',
+      MetaLeft:'\u2318', MetaRight:'\u2318',
+      Escape:'Esc', Enter:'\u21a9', Backspace:'\u232b',
+      Delete:'\u2326', Tab:'\u21e5', Space:'\u2423',
+    };
+    if (m[code]) return m[code];
+  } else {
+    const m = {
+      ControlLeft: 'Ctrl', ControlRight: 'Ctrl',
+      ShiftLeft: 'Shift', ShiftRight: 'Shift',
+      AltLeft: 'Alt', AltRight: 'Alt',
+      MetaLeft: platform === 'windows' ? 'Win' : 'Super',
+      MetaRight: platform === 'windows' ? 'Win' : 'Super',
+      Escape: 'Esc', Enter: 'Enter', Backspace: 'Backspace',
+      Delete: 'Del', Tab: 'Tab', Space: 'Space',
+    };
+    if (m[code]) return m[code];
+  }
   if (code.startsWith('Key')) return code.slice(3);
   if (code.startsWith('Digit')) return code.slice(5);
   return code;
 }
 
 async function init() {
+  platform = await invoke('get_platform');
+  
   const mics = await invoke('get_microphones');
   const list = document.getElementById('micList');
   list.innerHTML = '';
@@ -61,6 +77,7 @@ async function init() {
   }, 1500);
 
   checkAndDownloadModel();
+  updatePlatformLabels();
 }
 
 async function testMic() {
@@ -222,6 +239,13 @@ function capture(which) {
   document.addEventListener('keydown', onKD, true);
   document.addEventListener('keyup', onKU, true);
   invoke('capture_mouse').then(s => { if (s) finish(s); });
+}
+
+function updatePlatformLabels() {
+  if (platform !== 'macos') {
+    document.getElementById('toggleDisp').textContent = 'Right Alt';
+    document.getElementById('doneSubtext').innerHTML = 'OpenBolo runs in your system tray.<br>Use your shortcuts to start dictating.';
+  }
 }
 
 init();

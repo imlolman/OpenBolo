@@ -13,6 +13,8 @@ pub fn ensure_overlay(app: &AppHandle) {
         .skip_taskbar(true)
         .visible(false)
         .resizable(false)
+        .icon(crate::icons::app_icon_rgba())
+        .expect("overlay window icon")
         .build();
 }
 

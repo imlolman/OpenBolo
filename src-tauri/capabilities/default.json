@@ -1,7 +1,7 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "Default capabilities for WhisperFlow Alternative",
+  "description": "Default capabilities for OpenBolo",
   "windows": ["*"],
   "permissions": [
     "core:default",

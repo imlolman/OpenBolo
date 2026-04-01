@@ -1,6 +1,7 @@
 mod audio;
 mod commands;
 mod config;
+mod icons;
 mod overlay;
 mod shortcuts;
 mod text_inject;
@@ -71,10 +72,10 @@ pub async fn load_model_bg(state: AppState, _app: tauri::AppHandle) {
             state.model_loaded.store(true, Ordering::SeqCst);
         }
         Ok(Err(e)) => {
-            eprintln!("[wisperflow] Failed to load model: {}", e);
+            eprintln!("[openbolo] Failed to load model: {}", e);
         }
         Err(e) => {
-            eprintln!("[wisperflow] Model load task panicked: {}", e);
+            eprintln!("[openbolo] Model load task panicked: {}", e);
         }
     }
 }
@@ -151,7 +152,7 @@ fn start_recording(state: &AppState, app: &tauri::AppHandle, mode: &str) {
 
     let mic = state.config.read().mic_device.clone();
     if let Err(e) = state.recorder.lock().start(mic.as_deref()) {
-        eprintln!("[wisperflow] Failed to start recording: {}", e);
+        eprintln!("[openbolo] Failed to start recording: {}", e);
         state.is_recording.store(false, Ordering::SeqCst);
         return;
     }
@@ -282,7 +283,8 @@ pub fn run() {
             commands::check_model_exists,
             commands::open_settings,
             commands::finish_onboarding,
+            commands::get_platform,
         ])
         .run(tauri::generate_context!())
-        .expect("error while running WhisperFlow Alternative");
+        .expect("error while running OpenBolo");
 }

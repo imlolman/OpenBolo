@@ -1,8 +1,8 @@
 {
   "$schema": "https://raw.githubusercontent.com/tauri-apps/tauri/dev/crates/tauri-cli/schema.json",
-  "productName": "WhisperFlow Alternative",
+  "productName": "OpenBolo",
   "version": "0.1.0",
-  "identifier": "com.whisperflow-alternative.app",
+  "identifier": "com.openflow.app",
   "build": {
     "frontendDist": "../src"
   },
@@ -16,7 +16,7 @@
   },
   "bundle": {
     "active": true,
-    "targets": ["dmg", "app", "nsis", "msi"],
+    "targets": ["dmg", "app", "nsis", "msi", "deb", "appimage"],
     "icon": ["icons/32x32.png", "icons/128x128.png", "icons/256x256.png", "icons/icon.png"],
     "macOS": {
       "minimumSystemVersion": "11.0"

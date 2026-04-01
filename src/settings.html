@@ -2,6 +2,7 @@
 <html>
 <head>
 <meta charset="utf-8">
+<link rel="icon" href="assets/app-icon.png" type="image/png">
 <link rel="stylesheet" href="css/theme.css">
 <style>
   body { overflow-y: auto; }
@@ -9,7 +10,10 @@
 </head>
 <body>
 <div class="container">
-  <h1>WhisperFlow Alternative</h1>
+  <div class="app-brand">
+    <img class="app-brand-icon" src="assets/app-icon.png" width="44" height="44" alt="">
+    <h1>OpenBolo</h1>
+  </div>
 
   <div class="section-title">Microphone</div>
   <div class="card">
@@ -45,7 +49,7 @@
 
   <div class="section-title">Options</div>
   <div class="card">
-    <div class="opt-row" onclick="tog('hide_dock_icon')">
+    <div class="opt-row" id="dockRow" onclick="tog('hide_dock_icon')">
       <div class="opt-info">
         <span>Auto-hide dock icon</span>
         <span class="opt-desc">Hide the app from the Dock</span>
@@ -54,7 +58,7 @@
     </div>
     <div class="opt-row" onclick="tog('hide_menu_icon')">
       <div class="opt-info">
-        <span>Auto-hide menu bar icon</span>
+        <span id="trayLabel">Auto-hide menu bar icon</span>
         <span class="opt-desc">Visible for 10s on launch, then hides</span>
       </div>
       <input type="checkbox" id="chkMenu">

@@ -41,8 +41,8 @@ impl AudioRecorder {
     pub fn start(&mut self, device_name: Option<&str>) -> anyhow::Result<()> {
         // Kill any lingering old stream first
         self.recording.store(false, Ordering::SeqCst);
-        if self.stream.is_some() {
-            self.stream = None;
+        if let Some(stream) = self.stream.take() {
+            let _ = stream.pause();
             std::thread::sleep(std::time::Duration::from_millis(50));
         }
 
@@ -104,7 +104,9 @@ impl AudioRecorder {
         self.recording.store(false, Ordering::SeqCst);
         // Invalidate this stream's generation so its callbacks can't write anymore
         self.generation.fetch_add(1, Ordering::SeqCst);
-        self.stream = None;
+        if let Some(stream) = self.stream.take() {
+            let _ = stream.pause();
+        }
         // Small delay to let any in-flight callbacks finish
         std::thread::sleep(std::time::Duration::from_millis(20));
 
@@ -130,7 +132,7 @@ impl AudioRecorder {
             resample(trimmed, self.native_rate, SAMPLE_RATE)
         };
 
-        // Normalize: scale so peak reaches ~0.8 — cap gain at 5x to avoid amplifying noise
+        // Normalize: scale so peak reaches ~0.8; cap gain at 5x to avoid amplifying noise
         let trimmed_peak = resampled.iter().map(|s| s.abs()).fold(0.0f32, f32::max);
         if trimmed_peak > 1e-4 {
             let gain = (0.8 / trimmed_peak).min(5.0);
@@ -205,7 +207,7 @@ impl AudioRecorder {
 
         stream.play()?;
         std::thread::sleep(std::time::Duration::from_millis(500));
-        drop(stream);
+        let _ = stream.pause();
 
         Ok(f32::from_bits(peak.load(Ordering::Relaxed)) as f64)
     }

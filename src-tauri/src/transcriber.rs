@@ -53,12 +53,12 @@ impl Transcriber {
         let mut state = match self.ctx.create_state() {
             Ok(s) => s,
             Err(e) => {
-                eprintln!("[wisperflow] create_state failed: {:?}", e);
+                eprintln!("[openbolo] create_state failed: {:?}", e);
                 return None;
             }
         };
         if let Err(e) = state.full(params, audio) {
-            eprintln!("[wisperflow] state.full() failed: {:?}", e);
+            eprintln!("[openbolo] state.full() failed: {:?}", e);
             return None;
         }
 

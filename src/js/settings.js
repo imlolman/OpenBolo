@@ -2,6 +2,7 @@ const { invoke } = window.__TAURI__.core;
 const { listen } = window.__TAURI__.event;
 
 let capturing = null;
+let platform = 'macos';
 
 const CODE_MAP = {
   AltLeft:'key:Alt_L', AltRight:'key:Alt_R',
@@ -19,15 +20,28 @@ for (let i = 0; i <= 9; i++) CODE_MAP['Digit' + i] = 'key:' + i;
 });
 
 function keyDisp(code) {
-  const m = {
-    ControlLeft: '\u2303', ControlRight: '\u2303',
-    ShiftLeft: '\u21e7', ShiftRight: '\u21e7',
-    AltLeft: '\u2325', AltRight: '\u2325',
-    MetaLeft: '\u2318', MetaRight: '\u2318',
-    Escape: 'Esc', Enter: '\u21a9', Backspace: '\u232b',
-    Delete: '\u2326', Tab: '\u21e5', Space: '\u2423',
-  };
-  if (m[code]) return m[code];
+  if (platform === 'macos') {
+    const m = {
+      ControlLeft: '\u2303', ControlRight: '\u2303',
+      ShiftLeft: '\u21e7', ShiftRight: '\u21e7',
+      AltLeft: '\u2325', AltRight: '\u2325',
+      MetaLeft: '\u2318', MetaRight: '\u2318',
+      Escape: 'Esc', Enter: '\u21a9', Backspace: '\u232b',
+      Delete: '\u2326', Tab: '\u21e5', Space: '\u2423',
+    };
+    if (m[code]) return m[code];
+  } else {
+    const m = {
+      ControlLeft: 'Ctrl', ControlRight: 'Ctrl',
+      ShiftLeft: 'Shift', ShiftRight: 'Shift',
+      AltLeft: 'Alt', AltRight: 'Alt',
+      MetaLeft: platform === 'windows' ? 'Win' : 'Super',
+      MetaRight: platform === 'windows' ? 'Win' : 'Super',
+      Escape: 'Esc', Enter: 'Enter', Backspace: 'Backspace',
+      Delete: 'Del', Tab: 'Tab', Space: 'Space',
+    };
+    if (m[code]) return m[code];
+  }
   if (code.startsWith('Key')) return code.slice(3);
   if (code.startsWith('Digit')) return code.slice(5);
   if (code.startsWith('F') && code.length <= 3) return code;
@@ -35,6 +49,8 @@ function keyDisp(code) {
 }
 
 async function init() {
+  platform = await invoke('get_platform');
+  
   const cfg = await invoke('get_config');
   document.getElementById('holdDisp').textContent = cfg._hold_display || 'Not set';
   document.getElementById('toggleDisp').textContent = cfg._toggle_display || 'Not set';
@@ -42,6 +58,12 @@ async function init() {
   document.getElementById('chkDock').checked = cfg.hide_dock_icon;
   document.getElementById('chkMenu').checked = cfg.hide_menu_icon;
   document.getElementById('chkLogin').checked = cfg.start_on_login;
+  
+  if (platform !== 'macos') {
+    document.getElementById('dockRow').style.display = 'none';
+    document.getElementById('trayLabel').textContent = 'Auto-hide system tray icon';
+  }
+  
   loadMics(cfg.mic_device);
   loadHistory();
 }

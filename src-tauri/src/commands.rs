@@ -2,7 +2,7 @@ use crate::audio::AudioRecorder;
 use crate::config::{self, HistoryEntry};
 use crate::shortcuts;
 use crate::transcriber;
-use crate::{overlay, tray, AppState};
+use crate::{icons, overlay, tray, AppState};
 use tauri::{AppHandle, Emitter, Manager};
 
 pub fn do_open_settings(app: &AppHandle) {
@@ -15,10 +15,12 @@ pub fn do_open_settings(app: &AppHandle) {
         "settings",
         tauri::WebviewUrl::App("settings.html".into()),
     )
-    .title("WhisperFlow Alternative Settings")
+    .title("OpenBolo Settings")
     .inner_size(380.0, 580.0)
     .resizable(false)
     .center()
+    .icon(icons::app_icon_rgba())
+    .expect("settings window icon")
     .build();
 }
 
@@ -32,10 +34,12 @@ pub fn do_open_onboarding(app: &AppHandle) {
         "onboarding",
         tauri::WebviewUrl::App("onboarding.html".into()),
     )
-    .title("WhisperFlow Alternative Setup")
+    .title("OpenBolo Setup")
     .inner_size(420.0, 520.0)
     .resizable(false)
     .center()
+    .icon(icons::app_icon_rgba())
+    .expect("onboarding window icon")
     .build();
 }
 
@@ -127,6 +131,22 @@ pub fn save_field(
                     remove_launch_agent().ok();
                 }
             }
+            #[cfg(target_os = "windows")]
+            {
+                if enabled {
+                    install_windows_autostart().ok();
+                } else {
+                    remove_windows_autostart().ok();
+                }
+            }
+            #[cfg(target_os = "linux")]
+            {
+                if enabled {
+                    install_linux_autostart().ok();
+                } else {
+                    remove_linux_autostart().ok();
+                }
+            }
         }
         _ => return Err("Unknown field".into()),
     }
@@ -140,18 +160,8 @@ pub fn get_history() -> Result<Vec<HistoryEntry>, String> {
 
 #[tauri::command]
 pub fn copy_text(text: String) -> Result<(), String> {
-    std::process::Command::new("pbcopy")
-        .stdin(std::process::Stdio::piped())
-        .spawn()
-        .and_then(|mut child| {
-            use std::io::Write;
-            if let Some(ref mut stdin) = child.stdin {
-                stdin.write_all(text.as_bytes())?;
-            }
-            child.wait()?;
-            Ok(())
-        })
-        .map_err(|e| e.to_string())
+    let mut clipboard = arboard::Clipboard::new().map_err(|e| e.to_string())?;
+    clipboard.set_text(&text).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -248,6 +258,11 @@ pub fn open_settings(app: AppHandle) -> Result<(), String> {
 }
 
 #[tauri::command]
+pub fn get_platform() -> Result<String, String> {
+    Ok(std::env::consts::OS.to_string())
+}
+
+#[tauri::command]
 pub fn finish_onboarding(
     app: AppHandle,
     state: tauri::State<'_, AppState>,
@@ -315,7 +330,7 @@ fn install_launch_agent() -> anyhow::Result<()> {
 <plist version="1.0">
 <dict>
     <key>Label</key>
-    <string>com.whisperflow-alternative.app</string>
+    <string>com.openflow.app</string>
     <key>ProgramArguments</key>
     <array>
         <string>{}</string>
@@ -326,7 +341,7 @@ fn install_launch_agent() -> anyhow::Result<()> {
 </plist>"#,
         exe.display()
     );
-    std::fs::write(plist_dir.join("com.whisperflow-alternative.app.plist"), plist)?;
+    std::fs::write(plist_dir.join("com.openflow.app.plist"), plist)?;
     Ok(())
 }
 
@@ -334,7 +349,64 @@ fn install_launch_agent() -> anyhow::Result<()> {
 fn remove_launch_agent() -> anyhow::Result<()> {
     let path = dirs::home_dir()
         .ok_or_else(|| anyhow::anyhow!("no home"))?
-        .join("Library/LaunchAgents/com.whisperflow-alternative.app.plist");
+        .join("Library/LaunchAgents/com.openflow.app.plist");
+    if path.exists() {
+        std::fs::remove_file(path)?;
+    }
+    Ok(())
+}
+
+#[cfg(target_os = "windows")]
+fn install_windows_autostart() -> anyhow::Result<()> {
+    use winreg::enums::*;
+    use winreg::RegKey;
+    
+    let hkcu = RegKey::predef(HKEY_CURRENT_USER);
+    let run_key = hkcu.open_subkey_with_flags("Software\\Microsoft\\Windows\\CurrentVersion\\Run", KEY_WRITE)?;
+    let exe = std::env::current_exe()?;
+    run_key.set_value("OpenBolo", &exe.to_string_lossy().to_string())?;
+    Ok(())
+}
+
+#[cfg(target_os = "windows")]
+fn remove_windows_autostart() -> anyhow::Result<()> {
+    use winreg::enums::*;
+    use winreg::RegKey;
+    
+    let hkcu = RegKey::predef(HKEY_CURRENT_USER);
+    if let Ok(run_key) = hkcu.open_subkey_with_flags("Software\\Microsoft\\Windows\\CurrentVersion\\Run", KEY_WRITE) {
+        run_key.delete_value("OpenBolo").ok();
+    }
+    Ok(())
+}
+
+#[cfg(target_os = "linux")]
+fn install_linux_autostart() -> anyhow::Result<()> {
+    let config_dir = dirs::config_dir()
+        .ok_or_else(|| anyhow::anyhow!("no config dir"))?
+        .join("autostart");
+    std::fs::create_dir_all(&config_dir)?;
+    
+    let exe = std::env::current_exe()?;
+    let desktop_entry = format!(
+        "[Desktop Entry]\n\
+         Type=Application\n\
+         Name=OpenBolo\n\
+         Exec={}\n\
+         Terminal=false\n\
+         X-GNOME-Autostart-enabled=true\n",
+        exe.display()
+    );
+    
+    std::fs::write(config_dir.join("com.openflow.app.desktop"), desktop_entry)?;
+    Ok(())
+}
+
+#[cfg(target_os = "linux")]
+fn remove_linux_autostart() -> anyhow::Result<()> {
+    let path = dirs::config_dir()
+        .ok_or_else(|| anyhow::anyhow!("no config dir"))?
+        .join("autostart/com.openflow.app.desktop");
     if path.exists() {
         std::fs::remove_file(path)?;
     }

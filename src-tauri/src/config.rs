@@ -67,7 +67,7 @@ pub fn history_path() -> PathBuf {
 pub fn model_dir() -> PathBuf {
     dirs::data_dir()
         .expect("no data dir")
-        .join("com.whisperflow-alternative")
+        .join("com.openflow.app")
         .join("models")
 }
 
