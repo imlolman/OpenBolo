@@ -1,10 +1,10 @@
 [package]
-name = "openflow"
+name = "openbolo"
 version = "0.1.0"
 edition = "2021"
 
 [lib]
-name = "openflow_lib"
+name = "openbolo_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]
@@ -24,8 +24,9 @@ chrono = { version = "0.4", features = ["serde"] }
 parking_lot = "0.12"
 anyhow = "1"
 log = "0.4"
+env_logger = "0.11"
 futures-util = "0.3"
-rdev = { version = "0.5", features = ["unstable_grab"] }
+rdev = { git = "https://github.com/Narsil/rdev.git", rev = "c77b4e5456301cfa7f2226020f2a58f2f8d77c5d", features = ["unstable_grab"], default-features = false }
 enigo = "0.2"
 arboard = "3"
 
@@ -33,6 +34,7 @@ arboard = "3"
 cocoa = "0.26"
 objc = "0.2"
 core-graphics = "0.24"
+core-foundation = "0.10"
 
 [target.'cfg(target_os = "windows")'.dependencies]
 winreg = "0.52"

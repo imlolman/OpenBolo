@@ -57,10 +57,8 @@ impl AppState {
 pub async fn load_model_bg(state: AppState, _app: tauri::AppHandle) {
     let path = config::model_path();
     if !path.exists() {
-        log::info!("Model not found at {:?}, skipping load", path);
         return;
     }
-    log::info!("Loading whisper model...");
     let path_str = path.to_string_lossy().to_string();
     let result =
         tauri::async_runtime::spawn_blocking(move || transcriber::Transcriber::load(&path_str))
@@ -80,7 +78,7 @@ pub async fn load_model_bg(state: AppState, _app: tauri::AppHandle) {
     }
 }
 
-fn start_shortcut_listener(state: &AppState, app: tauri::AppHandle) {
+pub fn start_shortcut_listener(state: &AppState, app: tauri::AppHandle) {
     let (event_tx, mut event_rx) = tokio::sync::mpsc::unbounded_channel();
 
     let grab_handle = shortcuts::GrabHandle {
@@ -220,6 +218,10 @@ fn stop_recording(state: &AppState, app: &tauri::AppHandle) {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("warn"))
+        .format_timestamp_millis()
+        .init();
+    
     tauri::Builder::default()
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
             commands::do_open_settings(app);
@@ -230,13 +232,11 @@ pub fn run() {
 
             tray::setup(app)?;
 
-            // Apply dock icon setting
             #[cfg(target_os = "macos")]
             if state.config.read().hide_dock_icon {
                 commands::set_dock_icon_visible(app.handle(), false);
             }
 
-            // Auto-hide menu bar icon after 10 seconds
             if state.config.read().hide_menu_icon {
                 let handle = app.handle().clone();
                 tauri::async_runtime::spawn(async move {
@@ -245,21 +245,18 @@ pub fn run() {
                 });
             }
 
-            // Check onboarding
             let needs_onboarding = !state.config.read().setup_complete;
             if needs_onboarding {
                 commands::do_open_onboarding(app.handle());
             } else {
-                // Load model in background
                 let st2 = state.clone();
                 let handle = app.handle().clone();
                 tauri::async_runtime::spawn(async move {
                     load_model_bg(st2, handle).await;
                 });
+                
+                start_shortcut_listener(&state, app.handle().clone());
             }
-
-            // Start shortcut listener
-            start_shortcut_listener(&state, app.handle().clone());
 
             Ok(())
         })
@@ -284,6 +281,8 @@ pub fn run() {
             commands::open_settings,
             commands::finish_onboarding,
             commands::get_platform,
+            commands::check_permissions,
+            commands::open_accessibility_settings,
         ])
         .run(tauri::generate_context!())
         .expect("error while running OpenBolo");

@@ -21,7 +21,6 @@ pub fn ensure_overlay(app: &AppHandle) {
 pub fn show(app: &AppHandle, mode: &str) {
     ensure_overlay(app);
     if let Some(window) = app.get_webview_window("overlay") {
-        // Position bottom-center of primary monitor
         if let Ok(Some(monitor)) = window.primary_monitor() {
             let screen = monitor.size();
             let scale = monitor.scale_factor();

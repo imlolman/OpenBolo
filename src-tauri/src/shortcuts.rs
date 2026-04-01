@@ -35,6 +35,14 @@ impl Default for ParsedShortcut {
     }
 }
 
+#[derive(Clone)]
+pub struct GrabHandleInner {
+    pub enabled: Arc<AtomicBool>,
+    pub config: Arc<RwLock<ShortcutConfig>>,
+    pub capture_mode: Arc<AtomicBool>,
+    pub capture_tx: Arc<parking_lot::Mutex<Option<tokio::sync::oneshot::Sender<String>>>>,
+}
+
 fn key_code_from_name(name: &str) -> Option<Key> {
     match name {
         "Alt_L" => Some(Key::Alt),
@@ -104,75 +112,6 @@ fn key_code_from_name(name: &str) -> Option<Key> {
     }
 }
 
-fn key_name_from_code(code: &Key) -> Option<&'static str> {
-    match code {
-        Key::Alt => Some("Alt_L"),
-        Key::AltGr => Some("Alt_R"),
-        Key::ShiftLeft => Some("Shift_L"),
-        Key::ShiftRight => Some("Shift_R"),
-        Key::ControlLeft => Some("Control_L"),
-        Key::ControlRight => Some("Control_R"),
-        Key::MetaLeft => Some("Super_L"),
-        Key::MetaRight => Some("Super_R"),
-        Key::Space => Some("space"),
-        Key::Return => Some("Return"),
-        Key::Escape => Some("Escape"),
-        Key::Backspace => Some("BackSpace"),
-        Key::Tab => Some("Tab"),
-        Key::CapsLock => Some("Caps_Lock"),
-        Key::Delete => Some("Delete"),
-        Key::F1 => Some("F1"),
-        Key::F2 => Some("F2"),
-        Key::F3 => Some("F3"),
-        Key::F4 => Some("F4"),
-        Key::F5 => Some("F5"),
-        Key::F6 => Some("F6"),
-        Key::F7 => Some("F7"),
-        Key::F8 => Some("F8"),
-        Key::F9 => Some("F9"),
-        Key::F10 => Some("F10"),
-        Key::F11 => Some("F11"),
-        Key::F12 => Some("F12"),
-        Key::KeyA => Some("a"),
-        Key::KeyB => Some("b"),
-        Key::KeyC => Some("c"),
-        Key::KeyD => Some("d"),
-        Key::KeyE => Some("e"),
-        Key::KeyF => Some("f"),
-        Key::KeyG => Some("g"),
-        Key::KeyH => Some("h"),
-        Key::KeyI => Some("i"),
-        Key::KeyJ => Some("j"),
-        Key::KeyK => Some("k"),
-        Key::KeyL => Some("l"),
-        Key::KeyM => Some("m"),
-        Key::KeyN => Some("n"),
-        Key::KeyO => Some("o"),
-        Key::KeyP => Some("p"),
-        Key::KeyQ => Some("q"),
-        Key::KeyR => Some("r"),
-        Key::KeyS => Some("s"),
-        Key::KeyT => Some("t"),
-        Key::KeyU => Some("u"),
-        Key::KeyV => Some("v"),
-        Key::KeyW => Some("w"),
-        Key::KeyX => Some("x"),
-        Key::KeyY => Some("y"),
-        Key::KeyZ => Some("z"),
-        Key::Num0 => Some("0"),
-        Key::Num1 => Some("1"),
-        Key::Num2 => Some("2"),
-        Key::Num3 => Some("3"),
-        Key::Num4 => Some("4"),
-        Key::Num5 => Some("5"),
-        Key::Num6 => Some("6"),
-        Key::Num7 => Some("7"),
-        Key::Num8 => Some("8"),
-        Key::Num9 => Some("9"),
-        _ => None,
-    }
-}
-
 fn is_modifier(code: &Key) -> bool {
     matches!(
         code,
@@ -214,8 +153,10 @@ fn button_from_rdev(btn: &Button) -> u8 {
         Button::Left => 0,
         Button::Right => 1,
         Button::Middle => 2,
-        Button::Unknown(n) if *n == 3 => 3,
-        Button::Unknown(n) if *n == 4 => 4,
+        Button::Unknown(3) => 3,
+        Button::Unknown(4) => 4,
+        Button::Unknown(8) => 3,
+        Button::Unknown(9) => 4,
         _ => 255,
     }
 }
@@ -257,12 +198,7 @@ fn keys_match_combo(pressed: &HashSet<Key>, combo: &[Key]) -> bool {
     combo.iter().all(|k| pressed.contains(k))
 }
 
-pub struct GrabHandle {
-    pub enabled: Arc<AtomicBool>,
-    pub config: Arc<RwLock<ShortcutConfig>>,
-    pub capture_mode: Arc<AtomicBool>,
-    pub capture_tx: Arc<parking_lot::Mutex<Option<tokio::sync::oneshot::Sender<String>>>>,
-}
+pub type GrabHandle = GrabHandleInner;
 
 struct GrabState {
     handle: GrabHandle,
@@ -378,6 +314,7 @@ impl GrabState {
 
     fn process_button_press(&mut self, config: &ShortcutConfig, btn: u8) -> bool {
         let mut suppress = false;
+        
         if let ParsedShortcut::MouseButton(b) = &config.hold {
             if btn == *b {
                 self.event_tx.send(ShortcutEvent::HoldPress).ok();
@@ -401,6 +338,7 @@ impl GrabState {
 
     fn process_button_release(&mut self, config: &ShortcutConfig, btn: u8) -> bool {
         let mut suppress = false;
+        
         if let ParsedShortcut::MouseButton(b) = &config.hold {
             if btn == *b {
                 self.event_tx.send(ShortcutEvent::HoldRelease).ok();
@@ -418,7 +356,7 @@ impl GrabState {
     }
 }
 
-#[cfg(not(target_os = "windows"))]
+#[cfg(all(not(target_os = "windows"), not(target_os = "macos")))]
 pub fn start_grab(
     handle: GrabHandle,
     event_tx: tokio::sync::mpsc::UnboundedSender<ShortcutEvent>,
@@ -442,7 +380,7 @@ pub fn start_grab(
             if handle.capture_mode.load(Ordering::SeqCst) {
                 if let EventType::ButtonPress(btn) = event.event_type {
                     let btn_code = button_from_rdev(&btn);
-                    if btn_code != 255 {
+                    if btn_code != 255 && btn_code != 0 {
                         let name = button_to_name(btn_code);
                         if let Some(tx) = handle.capture_tx.lock().take() {
                             tx.send(name).ok();
@@ -496,9 +434,141 @@ pub fn start_grab(
         };
 
         if let Err(e) = rdev::grab(callback) {
+            log::error!("[openbolo] Failed to grab input events: {:?}", e);
             eprintln!("[openbolo] Failed to grab input events: {:?}", e);
-            eprintln!("[openbolo] On macOS: Grant Accessibility permission in System Settings > Privacy & Security > Accessibility.");
             eprintln!("[openbolo] On Linux: Ensure you're in the 'input' group or run with appropriate permissions.");
+        }
+    })
+}
+
+/// macOS implementation using CGEvent for mouse buttons and rdev for keyboard
+#[cfg(target_os = "macos")]
+pub fn start_grab(
+    handle: GrabHandle,
+    event_tx: tokio::sync::mpsc::UnboundedSender<ShortcutEvent>,
+) -> std::thread::JoinHandle<()> {
+    use core_graphics::event::{CGEvent, CGEventTap, CGEventTapLocation, CGEventTapOptions, CGEventTapPlacement, CGEventType, EventField};
+    use core_graphics::event_source::CGEventSource;
+    
+    std::thread::spawn(move || {
+        let state = Arc::new(parking_lot::Mutex::new(GrabState {
+            handle: handle.clone(),
+            event_tx: event_tx.clone(),
+            pressed: HashSet::new(),
+            combo_hold_active: false,
+            combo_toggle_active: false,
+            combo_paste_active: false,
+            paste_pending: false,
+        }));
+
+        // Start rdev in a separate thread for keyboard events
+        let rdev_state = Arc::clone(&state);
+        let rdev_handle = handle.clone();
+        std::thread::spawn(move || {
+            rdev::set_is_main_thread(false);
+            
+            let callback = move |event: Event| -> Option<Event> {
+                // Only process keyboard events with rdev
+                match event.event_type {
+                    EventType::KeyPress(_) | EventType::KeyRelease(_) => {
+                        let mut guard = rdev_state.lock();
+                        let config = rdev_handle.config.read().clone();
+                        
+                        match event.event_type {
+                            EventType::KeyPress(key) => {
+                                if !guard.pressed.insert(key) {
+                                    return Some(event);
+                                }
+                                let suppress = guard.process_key_press(&config, key);
+                                if suppress { None } else { Some(event) }
+                            }
+                            EventType::KeyRelease(key) => {
+                                guard.pressed.remove(&key);
+                                let suppress = guard.process_key_release(&config, key);
+                                if suppress { None } else { Some(event) }
+                            }
+                            _ => Some(event)
+                        }
+                    }
+                    _ => Some(event)
+                }
+            };
+            
+            if let Err(e) = rdev::grab(callback) {
+                log::error!("[openbolo] rdev::grab failed: {:?}", e);
+            }
+        });
+
+        // CGEvent tap for mouse buttons
+        let event_types = vec![
+            CGEventType::LeftMouseDown,
+            CGEventType::LeftMouseUp,
+            CGEventType::RightMouseDown,
+            CGEventType::RightMouseUp,
+            CGEventType::OtherMouseDown,
+            CGEventType::OtherMouseUp,
+        ];
+
+        let cg_state = Arc::clone(&state);
+        let cg_handle = handle.clone();
+        
+        let tap_callback = move |_proxy, event_type: CGEventType, event: &CGEvent| -> Option<CGEvent> {
+            let mut guard = cg_state.lock();
+            let button_num = event.get_integer_value_field(EventField::MOUSE_EVENT_BUTTON_NUMBER);
+            let btn_code = button_num as u8;
+            
+            if cg_handle.capture_mode.load(Ordering::SeqCst) {
+                if matches!(event_type, CGEventType::LeftMouseDown | CGEventType::RightMouseDown | CGEventType::OtherMouseDown) {
+                    if btn_code != 0 {
+                        let name = button_to_name(btn_code);
+                        if let Some(tx) = cg_handle.capture_tx.lock().take() {
+                            tx.send(name).ok();
+                        }
+                        return None;
+                    }
+                }
+                return Some(event.to_owned());
+            }
+            
+            if !cg_handle.enabled.load(Ordering::SeqCst) {
+                return Some(event.to_owned());
+            }
+            
+            let config = cg_handle.config.read().clone();
+            
+            let suppress = match event_type {
+                CGEventType::LeftMouseDown | CGEventType::RightMouseDown | CGEventType::OtherMouseDown => {
+                    guard.process_button_press(&config, btn_code)
+                }
+                CGEventType::LeftMouseUp | CGEventType::RightMouseUp | CGEventType::OtherMouseUp => {
+                    guard.process_button_release(&config, btn_code)
+                }
+                _ => false
+            };
+            
+            if suppress { None } else { Some(event.to_owned()) }
+        };
+
+        match CGEventTap::new(
+            CGEventTapLocation::HID,
+            CGEventTapPlacement::HeadInsertEventTap,
+            CGEventTapOptions::Default,
+            event_types,
+            tap_callback,
+        ) {
+            Ok(tap) => {
+                unsafe {
+                    let run_loop_source = tap.mach_port.create_runloop_source(0).unwrap();
+                    let run_loop = core_foundation::runloop::CFRunLoop::get_current();
+                    run_loop.add_source(&run_loop_source, core_foundation::runloop::kCFRunLoopCommonModes);
+                    tap.enable();
+                    core_foundation::runloop::CFRunLoop::run_current();
+                }
+            }
+            Err(e) => {
+                log::error!("[openbolo] Failed to create CGEvent tap: {:?}", e);
+                eprintln!("[openbolo] Failed to create CGEvent tap. Make sure Accessibility permissions are granted.");
+            }
         }
     })
 }
@@ -525,10 +595,11 @@ pub fn start_grab(
             let mut guard = callback_state.lock();
             let handle = &guard.handle;
 
+            // During capture, ignore left click so UI clicks are not bound as the shortcut.
             if handle.capture_mode.load(Ordering::SeqCst) {
                 if let EventType::ButtonPress(btn) = event.event_type {
                     let btn_code = button_from_rdev(&btn);
-                    if btn_code != 255 {
+                    if btn_code != 255 && btn_code != 0 {
                         let name = button_to_name(btn_code);
                         if let Some(tx) = handle.capture_tx.lock().take() {
                             tx.send(name).ok();

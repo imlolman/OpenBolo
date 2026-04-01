@@ -3,6 +3,7 @@ use crate::config::{self, HistoryEntry};
 use crate::shortcuts;
 use crate::transcriber;
 use crate::{icons, overlay, tray, AppState};
+use serde::Serialize;
 use tauri::{AppHandle, Emitter, Manager};
 
 pub fn do_open_settings(app: &AppHandle) {
@@ -262,6 +263,89 @@ pub fn get_platform() -> Result<String, String> {
     Ok(std::env::consts::OS.to_string())
 }
 
+#[derive(Serialize)]
+pub struct PermissionStatus {
+    pub microphone: bool,
+    pub accessibility: bool,
+    pub input_access: bool,
+}
+
+#[tauri::command]
+pub fn check_permissions() -> Result<PermissionStatus, String> {
+    let microphone = check_microphone_permission();
+    let accessibility = check_accessibility_permission();
+    let input_access = check_input_access_permission();
+    
+    Ok(PermissionStatus {
+        microphone,
+        accessibility,
+        input_access,
+    })
+}
+
+fn check_microphone_permission() -> bool {
+    AudioRecorder::test_mic(None).is_ok()
+}
+
+#[cfg(target_os = "macos")]
+fn check_accessibility_permission() -> bool {
+    unsafe { AXIsProcessTrusted() }
+}
+
+#[cfg(not(target_os = "macos"))]
+fn check_accessibility_permission() -> bool {
+    true
+}
+
+#[cfg(target_os = "linux")]
+fn check_input_access_permission() -> bool {
+    // Check if user is in input group
+    if let Ok(output) = std::process::Command::new("groups").output() {
+        if let Ok(groups_str) = String::from_utf8(output.stdout) {
+            if groups_str.contains("input") {
+                return true;
+            }
+        }
+    }
+    
+    // Fallback: try to open an input device
+    if let Ok(entries) = std::fs::read_dir("/dev/input") {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.to_string_lossy().contains("event") {
+                if std::fs::File::open(&path).is_ok() {
+                    return true;
+                }
+            }
+        }
+    }
+    
+    false
+}
+
+#[cfg(not(target_os = "linux"))]
+fn check_input_access_permission() -> bool {
+    true
+}
+
+#[cfg(target_os = "macos")]
+#[link(name = "ApplicationServices", kind = "framework")]
+extern "C" {
+    fn AXIsProcessTrusted() -> bool;
+}
+
+#[tauri::command]
+pub fn open_accessibility_settings() -> Result<(), String> {
+    #[cfg(target_os = "macos")]
+    {
+        std::process::Command::new("open")
+            .arg("x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")
+            .spawn()
+            .map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
 #[tauri::command]
 pub fn finish_onboarding(
     app: AppHandle,
@@ -283,6 +367,9 @@ pub fn finish_onboarding(
     if let Some(win) = app.get_webview_window("onboarding") {
         win.close().ok();
     }
+
+    // Start shortcut listener now that onboarding is complete
+    crate::start_shortcut_listener(state.inner(), app.clone());
 
     // Load model in background if exists
     let state_clone = state.inner().clone();
@@ -330,7 +417,7 @@ fn install_launch_agent() -> anyhow::Result<()> {
 <plist version="1.0">
 <dict>
     <key>Label</key>
-    <string>com.openflow.app</string>
+    <string>com.openbolo.app</string>
     <key>ProgramArguments</key>
     <array>
         <string>{}</string>
@@ -341,7 +428,7 @@ fn install_launch_agent() -> anyhow::Result<()> {
 </plist>"#,
         exe.display()
     );
-    std::fs::write(plist_dir.join("com.openflow.app.plist"), plist)?;
+    std::fs::write(plist_dir.join("com.openbolo.app.plist"), plist)?;
     Ok(())
 }
 
@@ -349,7 +436,7 @@ fn install_launch_agent() -> anyhow::Result<()> {
 fn remove_launch_agent() -> anyhow::Result<()> {
     let path = dirs::home_dir()
         .ok_or_else(|| anyhow::anyhow!("no home"))?
-        .join("Library/LaunchAgents/com.openflow.app.plist");
+        .join("Library/LaunchAgents/com.openbolo.app.plist");
     if path.exists() {
         std::fs::remove_file(path)?;
     }
@@ -398,7 +485,7 @@ fn install_linux_autostart() -> anyhow::Result<()> {
         exe.display()
     );
     
-    std::fs::write(config_dir.join("com.openflow.app.desktop"), desktop_entry)?;
+    std::fs::write(config_dir.join("com.openbolo.app.desktop"), desktop_entry)?;
     Ok(())
 }
 
@@ -406,7 +493,7 @@ fn install_linux_autostart() -> anyhow::Result<()> {
 fn remove_linux_autostart() -> anyhow::Result<()> {
     let path = dirs::config_dir()
         .ok_or_else(|| anyhow::anyhow!("no config dir"))?
-        .join("autostart/com.openflow.app.desktop");
+        .join("autostart/com.openbolo.app.desktop");
     if path.exists() {
         std::fs::remove_file(path)?;
     }
